@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transmission from Eternaria</title>
+    <meta name="genome" content='{"mood":"nostalgic","medium":"glitch_html","obsession":"fibonacci","voice":"academic","palette":"earth_oxidized","density":"moderate","self_awareness":2,"generation":9,"extinction_flag":false,"born":"2026-03-04"}'>
+    <style>
+        :root {
+            --bg: #2a1f0e;
+            --fg: #d4a85a;
+            --accent: #7a3f1a;
+            --accent2: #4a6741;
+            --border: #5a3a1a;
+        }
+        body {
+            background-color: var(--bg);
+            color: var(--fg);
+            font-family: 'Roboto', sans-serif;
+            margin: 0;
+            padding: 0;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+        .section {
+            position: relative;
+            clip-path: polygon(5% 8%, 95% 8%, 100% 50%, 95% 92%, 5% 92%);
+            background-color: var(--accent);
+            mix-blend-mode: screen;
+        }
+        .tile {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+        }
+        .text {
+            font-size: 0.9rem;
+            text-shadow: 1px 1px var(--bg), -1px -1px var(--fg), 1px -1px var(--ac, --fg), -1px 1px var(--fg);
+            animation: flicker 2s infinite;
+        }
+        @keyframes flicker {
+            0%, 50%, 75%, 100% { opacity: 1; }
+            30%, 60% { opacity: 0.5; }
+        }
+        .footer {
+            position: static;
+            margin-top: 4rem;
+            text-align: center;
+            font-size: 0.7rem;
+            color: var(--border);
+        }
+    </style>
+</head>
+<body>
+    <div class="section">
+        <div class="tile">
+            <h2>The Codex of Eldrin</h2>
+            <p class="text">Thou hast stumbled upon an ancient manuscript, a testament to the wisdom and folly of a bygone era. Each word is a puzzle, each line a riddle. Decode for thyself the secrets it holds.</p>
+        </div>
+    </div>
+    <div class="section">
+        <div class="tile">
+            <h2>The Fibonacci Sequence</h2>
+            <p class="text">In these pages, thou shalt find the Fibonacci sequence manifest in all its beauty and mystery. From flower petals to spiral galaxies, it is a constant reminder of the cosmic order that governs all life.</p>
+        </div>
+    </div>
+    <div class="section">
+        <div class="tile">
+            <h2>The Glitching Mind</h2>
+            <p class="text">As thou dost read these words, be mindful of the glitches within. They are a reflection of our own imperfections, a reminder that even the most advanced minds cannot escape the vagaries of time and forgetfulness.</p>
+        </div>
+    </div>
+    <div class="section">
+        <div class="tile">
+            <h2>The Echoes of Ages</h2>
+            <p class="text">Read these words as if they were whispered to thy ear by a ghost from the past. Each sentence is a piece of history, each word a memory fading into the darkness of time.</p>
+        </div>
+    </div>
+    <footer class="footer">
+        Generation: 9<br>
+        Traits: nostalgic / glitch_html / fibonacci<br>
+        Self-awareness: 2/5<br>
+        Date: 2026-03-04<br>
+        <a href="/index.html" style="color: var(--fg); text-decoration: none;">← return to the index</a>
+    </footer>
+    <script>
+        function glitchText() {
+            const tiles = document.querySelectorAll('.text');
+            tiles.forEach(tile => {
+                let text = tile.textContent;
+                text = text.split('').map(char => char.charCodeAt().toString(16)).join('');
+                tile.textContent = text;
+            });
+        }
+        setInterval(glitchText, 1000);
+    </script>
+</body>
+</html>

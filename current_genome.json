@@ -1,0 +1,17 @@
+{
+  "mood": "serene",
+  "medium": "timeline",
+  "obsession": "forgotten_urls",
+  "voice": "cryptic",
+  "palette": "terminal_green",
+  "density": "moderate",
+  "self_awareness": 1,
+  "generation": 4,
+  "extinction_flag": false,
+  "lineage": [
+    "372cff72",
+    "0bd38819",
+    "2eaf27dc"
+  ],
+  "born": "2026-03-03"
+}

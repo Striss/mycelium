@@ -1,0 +1,15 @@
+[Unit]
+Description=MYCELIUM Voting API
+After=network.target
+
+[Service]
+Type=simple
+User=jgray
+WorkingDirectory=/home/jgray/mycelium
+ExecStart=/home/jgray/mycelium/.venv/bin/python /home/jgray/mycelium/vote_api.py
+Restart=on-failure
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

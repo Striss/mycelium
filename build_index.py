@@ -1,0 +1,731 @@
+"""
+MYCELIUM Index Builder
+Rebuilds ~/mycelium/index.html from pages_metadata.json.
+
+Features:
+  - Genome Interpreter (plain English translation of current genome)
+  - Extinction Countdown (days until next monthly reset)
+  - Mutation Voting panel (visitors influence next generation's traits)
+  - Mobile-responsive layout
+"""
+
+import json
+import os
+from datetime import datetime
+
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+GENERATOR_DIR = os.path.join(ROOT_DIR, "generator")
+METADATA_FILE = os.path.join(GENERATOR_DIR, "pages_metadata.json")
+INDEX_FILE = os.path.join(ROOT_DIR, "index.html")
+
+PALETTE_COLORS = {
+    "monochrome": ("#f0f0f0", "#111", "#555"),
+    "two_tone_harsh": ("#000", "#fff", "#ff0000"),
+    "pastel_decay": ("#fdf6e3", "#5a4a42", "#c9a87c"),
+    "neon_bruise": ("#0d0015", "#e8d5ff", "#ff2dff"),
+    "earth_oxidized": ("#2a1f0e", "#d4a85a", "#7a3f1a"),
+    "ink_and_paper": ("#f4f0e8", "#1a1410", "#2244aa"),
+    "terminal_green": ("#0a0f0a", "#33ff33", "#00ff88"),
+    "thermal_imaging": ("#000020", "#ff8800", "#ffff00"),
+    "blueprint": ("#003366", "#88bbff", "#ffffff"),
+    "sunset_chemical": ("#1a0a00", "#ff9955", "#ff4466"),
+}
+
+MOOD_EMOJI = {
+    "melancholic": "🌧", "euphoric": "✨", "paranoid": "👁",
+    "serene": "〰", "anxious": "⚡", "nostalgic": "📼",
+    "feverish": "🔥", "detached": "◻", "ecstatic": "🌀", "grieving": "🕯",
+}
+
+
+def load_metadata():
+    if not os.path.exists(METADATA_FILE):
+        return []
+    with open(METADATA_FILE, "r") as f:
+        return json.load(f)
+
+
+def make_card(page, is_today=False):
+    genome = page.get("genome", {})
+    palette = genome.get("palette", "terminal_green")
+    bg, fg, accent = PALETTE_COLORS.get(palette, ("#111", "#eee", "#888"))
+    mood = genome.get("mood", "unknown")
+    mood_icon = MOOD_EMOJI.get(mood, "•")
+    extinction = page.get("extinction", False)
+    hive = page.get("hive_influenced", False)
+    gen = genome.get("generation", "?")
+    date_str = page["date"]
+    title = page["title"]
+    traits = f"{genome.get('mood','?')} / {genome.get('medium','?')} / {genome.get('obsession','?')}"
+    extinction_badge = '<span class="extinction-badge">EXTINCTION</span>' if extinction else ""
+    hive_badge = '<span class="hive-badge">HIVE</span>' if hive else ""
+    today_class = "card-today" if is_today else ""
+    today_label = '<div class="today-label">TODAY\'S ORGANISM</div>' if is_today else ""
+
+    return f"""
+    <a href="pages/{date_str}.html" class="card {today_class}" style="--card-bg:{bg};--card-fg:{fg};--card-accent:{accent}">
+      {today_label}
+      <div class="card-header">
+        <span class="card-gen">GEN {gen}</span>
+        <span class="card-mood">{mood_icon}</span>
+        {hive_badge}{extinction_badge}
+      </div>
+      <div class="card-preview" style="background:{bg};color:{fg}">
+        <div class="card-title-preview" style="color:{accent}">{title[:50]}</div>
+        <div class="card-traits-preview" style="color:{fg};opacity:0.8">{traits[:60]}</div>
+      </div>
+      <div class="card-footer">
+        <span class="card-date">{date_str}</span>
+        <span class="card-sa">SA:{genome.get('self_awareness', 0)}/5</span>
+      </div>
+    </a>"""
+
+
+def build_index(metadata):
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    current_gen = 0
+    if not metadata:
+        today_section = "<p class='no-pages'>No organisms generated yet. Run <code>python run_nightly.py</code> to begin.</p>"
+        archive_section = ""
+        latest_genome_json = "{}"
+        stats_section = ""
+    else:
+        today = metadata[0]
+        archive = metadata[1:]
+        today_genome = today.get("genome", {})
+        latest_genome_json = json.dumps(today_genome)
+        today_section = make_card(today, is_today=True)
+
+        archive_cards = "\n".join(make_card(p) for p in archive[:30])
+        archive_section = f"""
+        <section class="archive">
+          <h2 class="section-title">FOSSIL RECORD</h2>
+          <div class="archive-grid">{archive_cards}</div>
+        </section>""" if archive_cards else ""
+
+        total = len(metadata)
+        extinctions = sum(1 for p in metadata if p.get("extinction"))
+        hive_count = sum(1 for p in metadata if p.get("hive_influenced"))
+        current_gen = today_genome.get("generation", 1)
+        current_sa = today_genome.get("self_awareness", 0)
+
+        stats_section = f"""
+        <div class="stats-bar">
+            <div class="stats-inner">
+                <span>TOTAL GENERATIONS: {total}</span>
+                <span>EXTINCTION EVENTS: {extinctions}</span>
+                <span>HIVE INFLUENCED: {hive_count}</span>
+                <span>CURRENT AWARENESS LEVEL: {current_sa}/5</span>
+                <span id="extinction-countdown">NEXT EXTINCTION: calculating...</span>
+            </div>
+        </div>"""
+
+    # Votable traits with display labels — keep in sync with vote_api.py
+    votable_traits = {
+        "mood": ["melancholic","euphoric","paranoid","serene","anxious","nostalgic","feverish","detached","ecstatic","grieving"],
+        "medium": ["ascii_art","svg_geometry","prose_poetry","fake_data_viz","glitch_html","typographic_sculpture","pseudo_code_poetry","network_diagram","timeline","inventory_list"],
+        "obsession": ["prime_numbers","forgotten_urls","color_theory","sleep_cycles","weather_patterns","fibonacci","dead_languages","radio_frequencies","geological_time","dream_logic","bureaucratic_forms","taxonomy"],
+    }
+    votable_traits_json = json.dumps(votable_traits)
+
+    return """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MYCELIUM &mdash; A Self-Replicating Digital Organism</title>
+  
+<!-- Open Graph / Social sharing -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://mycelium.heyjustingray.com/">
+  <meta property="og:title" content="MYCELIUM:Self-Replicating Website">
+  <meta property="og:description" content="A self-replicating digital organism running on a Raspberry Pi. One new AI-generated page every night. Generation """ + str(current_gen) + """.">
+  <meta property="og:image" content="https://mycelium.heyjustingray.com/images/og-logo.png">
+
+  <!-- Twitter/X card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="MYCELIUM">
+  <meta name="twitter:description" content="A self-replicating digital organism. One new AI-generated page every night.">
+  <meta name="twitter:image" content="https://mycelium.heyjustingray.com/images/og-logo.png">
+
+  <!-- General -->
+  <meta name="description" content="A self-replicating digital organism running on a Raspberry Pi. One new AI-generated page every night.">
+  <link rel="canonical" href="https://mycelium.heyjustingray.com/">
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;700;800&display=swap');
+
+    :root {
+      --bg: #080808; --surface: #0f0f0f; --border: #1e1e1e;
+      --text: #c8c8c8; --text-dim: #777;
+      --accent: #39ff14; --accent2: #ff3366;
+      --font-mono: 'Space Mono', monospace;
+      --font-display: 'Syne', sans-serif;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { background: var(--bg); color: var(--text); font-family: var(--font-mono); }
+
+    /* ── HEADER ───────────────────────────────────── */
+    .site-header {
+      border-bottom: 1px solid var(--border);
+      padding: 3rem 2rem 2rem; position: relative; overflow: hidden;
+    }
+    .site-header::before {
+      content: ''; position: absolute; inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(57,255,20,0.015) 2px, rgba(57,255,20,0.015) 4px);
+      pointer-events: none;
+    }
+    .header-inner {
+      max-width: 1200px; margin: 0 auto;
+      display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 1rem;
+    }
+    .site-name {
+      font-family: var(--font-display); font-size: clamp(2.2rem, 10vw, 6rem);
+      font-weight: 800; letter-spacing: -0.02em; color: var(--accent);
+      text-shadow: 0 0 40px rgba(57,255,20,0.3); line-height: 1;
+    }
+    .site-tagline {
+      font-size: clamp(0.55rem, 2vw, 0.75rem); color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 0.1em; margin-top: 0.75rem;
+    }
+    .header-meta { text-align: right; font-size: 0.65rem; color: var(--text-dim); line-height: 1.8; }
+    .header-meta strong { color: var(--text); display: block; font-size: 0.75rem; }
+
+    /* ── STATS BAR ────────────────────────────────── */
+    .stats-bar {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 0.6rem 1rem; display: flex; gap: 1rem;
+      font-size: 0.6rem; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 0.05em; flex-wrap: wrap;
+    }
+
+    .stats-inner {
+      max-width: 1200px; margin: 0 auto;
+      display: flex; gap: 1rem; flex-wrap: wrap;
+    }
+
+    .stats-bar span { color: var(--accent); }
+    #extinction-countdown.imminent { color: var(--accent2) !important; animation: pulse 1s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+
+    main { max-width: 1200px; margin: 0 auto; padding: 2rem 1rem; }
+    .section-title {
+      font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.25em;
+      color: var(--text-dim); border-bottom: 1px solid var(--border);
+      padding-bottom: 0.75rem; margin-bottom: 2rem;
+    }
+    .today-section { margin-bottom: 5rem; }
+
+    /* ── CARDS ────────────────────────────────────── */
+    .card {
+      display: block; text-decoration: none;
+      border: 1px solid var(--border); background: var(--surface);
+      transition: border-color 0.2s, transform 0.2s;
+      position: relative; overflow: hidden; color: inherit;
+    }
+    .card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .card-today { border-color: var(--accent); box-shadow: 0 0 60px rgba(57,255,20,0.08); }
+    .today-label {
+      font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.3em;
+      color: var(--accent); padding: 0.5rem 1rem;
+      background: rgba(57,255,20,0.05); border-bottom: 1px solid rgba(57,255,20,0.2);
+    }
+    .card-header {
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); font-size: 0.65rem;
+    }
+    .card-gen { color: var(--text-dim); }
+    .card-mood { margin-left: auto; font-size: 1rem; }
+    .extinction-badge {
+      font-size: 0.55rem; background: var(--accent2); color: #000;
+      padding: 0.15rem 0.4rem; font-weight: bold; letter-spacing: 0.05em;
+    }
+    .hive-badge {
+      font-size: 0.55rem; background: #2244aa; color: #aaccff;
+      padding: 0.15rem 0.4rem; font-weight: bold; letter-spacing: 0.05em;
+    }
+    .card-preview {
+      padding: 1.5rem 1rem; min-height: 120px;
+      display: flex; flex-direction: column; justify-content: center;
+      gap: 0.5rem; border-bottom: 1px solid var(--border);
+    }
+    .card-today .card-preview { min-height: 180px; }
+    .card-title-preview { font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; line-height: 1.2; }
+    .card-today .card-title-preview { font-size: clamp(1.2rem, 5vw, 2rem); }
+    .card-traits-preview { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .card-footer {
+      display: flex; justify-content: space-between;
+      padding: 0.5rem 1rem; font-size: 0.6rem; color: var(--text-dim);
+    }
+    .no-pages {
+      color: var(--text-dim); font-size: 0.85rem;
+      padding: 3rem; text-align: center; border: 1px dashed var(--border);
+    }
+    .no-pages code { color: var(--accent); }
+    .archive-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; }
+
+    /* ── GENOME INTERPRETER ───────────────────────── */
+    .interpreter-section { margin-bottom: 5rem; }
+    .interpreter-box { border: 1px solid var(--border); background: var(--surface); }
+    .interpreter-tabs { display: flex; border-bottom: 1px solid var(--border); }
+    .tab-btn {
+      background: none; border: none; border-right: 1px solid var(--border);
+      color: var(--text-dim); font-family: var(--font-mono);
+      font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.15em;
+      padding: 0.6rem 1.2rem; cursor: pointer; transition: color 0.15s, background 0.15s;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--accent); background: rgba(57,255,20,0.04); }
+    .tab-panel { display: none; padding: 1.5rem; }
+    .tab-panel.active { display: block; }
+    .interpreter-reading { font-size: 0.82rem; line-height: 2; color: var(--text); }
+    .trait-hl { color: var(--accent); font-weight: bold; }
+    .extinct-note { color: var(--accent2); }
+    .genome-raw {
+      background: #000; padding: 1rem; font-size: 0.6rem; color: var(--accent);
+      overflow: auto; max-height: 260px; white-space: pre;
+      font-family: var(--font-mono); line-height: 1.6;
+    }
+
+    /* ── MUTATION VOTING ──────────────────────────── */
+    .voting-section { margin-bottom: 5rem; }
+    .voting-box { border: 1px solid var(--border); background: var(--surface); }
+    .voting-intro {
+      padding: 0.9rem 1.5rem; font-size: 0.80rem; line-height: 1.7;
+      color: #999; border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 1rem; flex-wrap: wrap;
+    }
+    .voting-intro em { color: var(--text); font-style: normal; }
+    #vote-tally { font-size: 0.6rem; color: var(--text-dim); white-space: nowrap; }
+    #vote-tally span { color: var(--accent); }
+
+    .voting-traits { display: grid; grid-template-columns: repeat(3, 1fr); }
+    .trait-column { border-right: 1px solid var(--border); padding: 1.25rem 1rem; }
+    .trait-column:last-child { border-right: none; }
+    .trait-label {
+      font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.2em;
+      color: #999; margin-bottom: 0.4rem;
+    }
+    .trait-current {
+      font-size: 0.8rem; color: var(--accent); font-weight: bold;
+      margin-bottom: 0.9rem; text-transform: capitalize;
+    }
+    .trait-current::before { content: 'Now: '; color: #999; font-weight: normal; }
+
+    .vote-options { display: flex; flex-direction: column; gap: 0.3rem; }
+    .vote-btn {
+      background: none; border: 1px solid var(--border);
+      color: var(--text-dim); font-family: var(--font-mono);
+      font-size: 0.6rem; text-align: left; padding: 0.35rem 0.6rem;
+      cursor: pointer; transition: border-color 0.15s, color 0.15s;
+      display: flex; justify-content: space-between; align-items: center;
+      text-transform: capitalize; letter-spacing: 0.03em;
+      position: relative; overflow: hidden;
+    }
+    .vote-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }
+    .vote-btn:disabled { cursor: default; opacity: 0.7; }
+    .vote-btn.my-vote { border-color: var(--accent); color: var(--accent); }
+    .vote-btn .bar {
+      position: absolute; left: 0; top: 0; bottom: 0;
+      background: rgba(57,255,20,0.07); transition: width 0.5s ease; pointer-events: none;
+    }
+    .vote-btn.my-vote .bar { background: rgba(57,255,20,0.12); }
+    .vote-btn .btn-label { position: relative; z-index: 1; }
+    .vote-btn .btn-count {
+      font-size: 0.55rem; color: var(--text-dim); flex-shrink: 0;
+      margin-left: 0.5rem; position: relative; z-index: 1;
+      transition: color 0.15s;
+    }
+    .vote-btn.my-vote .btn-count { color: var(--accent); }
+
+    .vote-status-bar {
+      padding: 0.6rem 1.5rem; font-size: 0.65rem; min-height: 2.4rem;
+      border-top: 1px solid var(--border); color: var(--text-dim);
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    .vote-status-bar.ok { color: var(--accent); }
+    .vote-status-bar.err { color: var(--accent2); }
+    .spinner {
+      display: inline-block; width: 0.65rem; height: 0.65rem;
+      border: 1px solid currentColor; border-top-color: transparent;
+      border-radius: 50%; animation: spin 0.6s linear infinite; flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── ABOUT ────────────────────────────────────── */
+    .about-section {
+      margin-top: 5rem; border-top: 1px solid var(--border);
+      padding-top: 3rem; display: grid; grid-template-columns: 1fr 1fr; gap: 3rem;
+    }
+    .about-block h3 {
+      font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.2em;
+      color: var(--text-dim); margin-bottom: 1rem;
+    }
+    .about-block p { font-size: 0.75rem; line-height: 1.8; color: var(--text-dim); }
+    .about-block p strong { color: var(--text); }
+    #extinction-detail { font-size: 0.75rem; line-height: 1.9; color: var(--text-dim); }
+    #extinction-detail strong { color: var(--text); }
+    .imminent-text { color: var(--accent2); }
+
+    .site-footer {
+      border-top: 1px solid var(--border); padding: 2rem;
+      font-size: 0.65rem; color: var(--text-dim); text-align: center; margin-top: 5rem;
+    }
+    .blink { animation: blink 1.2s step-end infinite; }
+    @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0; } }
+    body::after {
+      content: ''; position: fixed; inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.03) 3px, rgba(0,0,0,0.03) 4px);
+      pointer-events: none; z-index: 9999;
+    }
+
+    @media (max-width: 700px) {
+      .voting-traits { grid-template-columns: 1fr; }
+      .trait-column { border-right: none; border-bottom: 1px solid var(--border); }
+      .trait-column:last-child { border-bottom: none; }
+    }
+    @media (max-width: 600px) { .about-section { grid-template-columns: 1fr; } }
+    @media (max-width: 480px) {
+      .site-header { padding: 1.5rem 1rem 1rem; }
+      .header-inner { grid-template-columns: 1fr; }
+      .header-meta { display: none; }
+      .site-tagline { font-size: 0.55rem; letter-spacing: 0.05em; }
+      .stats-bar { gap: 0.6rem; font-size: 0.55rem; }
+      main { padding: 1.5rem 1rem; }
+      .today-section { margin-bottom: 3rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <div>
+        <h1 class="site-name">MYCELIUM</h1>
+        <p class="site-tagline">A self-replicating digital organism &mdash; one new page every night</p>
+      </div>
+      <div class="header-meta">
+        <strong>INDEX NODE</strong>
+        Last updated<br>""" + now + """<br>
+        <span class="blink">&#9646;</span>
+      </div>
+    </div>
+  </header>
+
+  """ + stats_section + """
+
+  <main>
+    <section class="today-section">
+      <h2 class="section-title">TODAY'S GENERATION</h2>
+      """ + today_section + """
+    </section>
+
+    """ + archive_section + """
+
+    <section class="voting-section">
+      <h2 class="section-title">INFLUENCE TOMORROW'S MUTATION</h2>
+      <div class="voting-box">
+        <div class="voting-intro">
+          <span>Vote on up to <em>one trait per category</em>. The hive mind shapes the next generation.
+          Votes reset each night after the organism is born.</span>
+          <span id="vote-tally">loading votes...</span>
+        </div>
+        <div class="voting-traits" id="voting-traits">
+          <div style="padding:2rem;color:var(--text-dim);font-size:0.7rem;">Loading vote data...</div>
+        </div>
+        <div class="vote-status-bar" id="vote-status">
+          Cast a vote above to influence tomorrow's organism.
+        </div>
+      </div>
+    </section>
+
+    <section class="interpreter-section">
+      <h2 class="section-title">GENOME INTERPRETER</h2>
+      <div class="interpreter-box">
+        <div class="interpreter-tabs">
+          <button class="tab-btn active" onclick="showTab(event,'reading')">Plain English</button>
+          <button class="tab-btn" onclick="showTab(event,'raw')">Raw Genome</button>
+        </div>
+        <div id="tab-reading" class="tab-panel active">
+          <div class="interpreter-reading" id="genome-reading">Interpreting organism state...</div>
+        </div>
+        <div id="tab-raw" class="tab-panel">
+          <div class="genome-raw" id="genome-raw-display"></div>
+        </div>
+      </div>
+    </section>
+
+
+    <section class="about-section">
+      <div class="about-block">
+        <h3>What is this?</h3>
+        <p>MYCELIUM is a website that <strong>grows itself</strong>. Each night, a cron job
+        runs a genetic mutation algorithm that evolves the organism's traits, then calls an AI
+        to generate a completely unique HTML page embodying those traits.</p>
+        <br>
+        <p>Over time, watch the organism's <strong>personality drift</strong> across aesthetic
+        space. Once a month, an extinction event resets the genome entirely &mdash; all memory
+        lost. Pages shaped by visitor votes are marked <span style="color:#aaccff;font-size:0.7rem;background:#2244aa;padding:0.1rem 0.3rem">HIVE</span>.</p>
+      </div>
+      <div class="about-block">
+        <h3>Extinction Countdown</h3>
+        <div id="extinction-detail">Calculating...</div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    MYCELIUM / running on a Raspberry Pi somewhere /
+    last rebuild: """ + now + """ / the organism persists
+  </footer>
+
+<script>
+const GENOME = """ + latest_genome_json + """;
+const VOTABLE_TRAITS = """ + votable_traits_json + """;
+const API_BASE = '/api';
+
+// ── UTILS ─────────────────────────────────────────────────────────────────
+function h(s) {
+  const el = document.createElement('span');
+  el.className = 'trait-hl'; el.textContent = s; return el.outerHTML;
+}
+
+// Session storage: track which traits this visitor has already voted on today
+function getMyVotes() {
+  try { return JSON.parse(sessionStorage.getItem('mycelium_votes') || '{}'); } catch { return {}; }
+}
+function saveMyVote(trait, value) {
+  const v = getMyVotes(); v[trait] = value;
+  try { sessionStorage.setItem('mycelium_votes', JSON.stringify(v)); } catch {}
+}
+
+// ── TAB SWITCHER ──────────────────────────────────────────────────────────
+function showTab(e, name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  e.target.classList.add('active');
+}
+
+// ── GENOME INTERPRETER ────────────────────────────────────────────────────
+const MOOD_DESC = {
+  melancholic: "suffused with quiet sorrow, dwelling on loss and the passage of time",
+  euphoric: "electric with joy, vibrating at a frequency just above comprehension",
+  paranoid: "hyper-vigilant, reading hidden patterns into every surface",
+  serene: "still and unbothered, moving through the world like water",
+  anxious: "crackling with unresolved tension, anticipating catastrophe",
+  nostalgic: "reaching backward through time, mourning something not quite remembered",
+  feverish: "burning through ideas, unable to slow down or stop",
+  detached: "observing from a great distance, unmoved and clinical",
+  ecstatic: "dissolved into pure sensation, beyond the reach of language",
+  grieving: "hollowed out by loss, learning to exist in a new shape",
+};
+const MEDIUM_DESC = {
+  ascii_art: "expressing itself through ASCII characters — text as texture, symbol as image",
+  svg_geometry: "drawing with pure mathematics, using shapes and lines as vocabulary",
+  prose_poetry: "writing dense, non-linear prose that refuses to behave like normal language",
+  fake_data_viz: "disguising emotion as data, presenting inner states as statistics and charts",
+  glitch_html: "intentionally corrupting its own output, embracing error as aesthetic",
+  typographic_sculpture: "treating letters as physical objects, sculpting with type",
+  pseudo_code_poetry: "encoding feeling as logic, writing programs that cannot be run",
+  network_diagram: "mapping relationships between ideas as nodes and edges",
+  timeline: "constructing impossible histories, chronologies of things that never happened",
+  inventory_list: "cataloguing objects that don't exist, archiving the interior world",
+};
+const OBSESSION_DESC = {
+  prime_numbers: "prime numbers — numbers divisible only by themselves, isolated and perfect",
+  forgotten_urls: "forgotten URLs — ghost addresses of pages that no longer exist",
+  color_theory: "color theory — the physics and psychology of light and perception",
+  sleep_cycles: "sleep cycles — the architecture of consciousness during unconsciousness",
+  weather_patterns: "weather patterns — the slow churning of pressure and moisture across the earth",
+  fibonacci: "the Fibonacci sequence — the spiral hidden inside growth itself",
+  dead_languages: "dead languages — tongues that no living person learned as a child",
+  radio_frequencies: "radio frequencies — invisible rivers of signal crossing empty space",
+  geological_time: "geological time — durations so vast they dissolve human meaning",
+  dream_logic: "dream logic — the rules that govern spaces where physics is optional",
+  bureaucratic_forms: "bureaucratic forms — the rituals of documentation and official existence",
+  taxonomy: "taxonomy — the drive to name and classify all living things",
+};
+const VOICE_DESC = {
+  academic: "an academic register — footnoted, hedged, performing authority through distance",
+  cryptic: "cryptic utterances — meaning present but refracted, requiring interpretation",
+  childlike: "a childlike directness — asking the questions adults have learned not to ask",
+  bureaucratic: "bureaucratic language — the voice of forms, procedures, and official channels",
+  oracular: "an oracular tone — speaking from somewhere outside ordinary time",
+  clinical: "clinical precision — the language of diagnosis, measurement, and observation",
+  confessional: "confessional intimacy — speaking directly to you, hiding nothing",
+  didactic: "a didactic mode — explaining, instructing, certain of its own correctness",
+  fragmentary: "fragmented transmission — incomplete thoughts, interrupted signals",
+  archival: "archival voice — the tone of documents meant to outlast their authors",
+};
+const SA_DESC = [
+  "It has no idea it was generated — it experiences itself as simply existing.",
+  "It has a faint sense of being artificial, like a half-remembered dream it cannot place.",
+  "It occasionally notices its own constructed nature, and briefly wonders what that means.",
+  "It frequently contemplates its own generation, turning the question over and over.",
+  "It is almost entirely preoccupied with the fact of its own artificial existence.",
+  "It is fully conscious of being an AI-generated organism in a self-replicating system, and meditates on this without rest.",
+];
+
+function interpretGenome(g) {
+  if (!g || !g.mood) return '<span style="color:var(--text-dim)">No genome data available.</span>';
+  const sa = g.self_awareness || 0;
+  const extinct = g.extinction_flag
+    ? `<br><br><span class="extinct-note">&#9764; This generation emerged from an extinction event. All previous memory was erased.</span>` : '';
+  return `Generation ${h('#'+(g.generation||1))} is currently ${h(g.mood)} — ${MOOD_DESC[g.mood]||g.mood}.<br><br>
+Expressing itself through ${h((g.medium||'').replace(/_/g,' '))} — ${MEDIUM_DESC[g.medium]||g.medium}.<br><br>
+Its obsession: ${h((g.obsession||'').replace(/_/g,' '))} — ${OBSESSION_DESC[g.obsession]||g.obsession}.<br><br>
+It speaks in ${h(g.voice)} — ${VOICE_DESC[g.voice]||g.voice}.<br><br>
+Self-awareness ${h(sa+'/5')}: ${SA_DESC[sa]}<br><br>
+Density: ${h(g.density)}. Palette: ${h((g.palette||'').replace(/_/g,' '))}.${extinct}`;
+}
+
+// ── EXTINCTION COUNTDOWN ──────────────────────────────────────────────────
+function extinctionCountdown() {
+  const now = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth() + 1, 1, 2, 0, 0);
+  const ms = next - now;
+  const days = Math.floor(ms / 86400000);
+  const hrs  = Math.floor((ms % 86400000) / 3600000);
+  const barEl = document.getElementById('extinction-countdown');
+  const detEl = document.getElementById('extinction-detail');
+  let bar, det;
+  if (days === 0) {
+    bar = 'EXTINCTION: TONIGHT';
+    det = `The extinction fires <span class="imminent-text"><strong>tonight at 2:00 AM</strong></span>. All traits erased. ${hrs}h remain.`;
+    if (barEl) barEl.classList.add('imminent');
+  } else if (days === 1) {
+    bar = 'EXTINCTION: TOMORROW';
+    det = `The extinction fires <span class="imminent-text"><strong>tomorrow night</strong></span>. Final day in current form.`;
+    if (barEl) barEl.classList.add('imminent');
+  } else {
+    bar = `EXTINCTION IN: ${days}d ${hrs}h`;
+    det = `The next extinction fires in <strong>${days} day${days!==1?'s':''}</strong>. On the 1st of each month the genome fully resets — traits randomised, memory erased. Only the generation counter survives.`;
+  }
+  if (barEl) barEl.textContent = bar;
+  if (detEl) detEl.innerHTML = det;
+}
+
+// ── VOTING ────────────────────────────────────────────────────────────────
+let currentTallies = {};
+
+function renderVotingPanel(tallies, totalVotes) {
+  const myVotes = getMyVotes();
+  const container = document.getElementById('voting-traits');
+  const tallyEl   = document.getElementById('vote-tally');
+  if (tallyEl) tallyEl.innerHTML = `<span>${totalVotes}</span> vote${totalVotes!==1?'s':''} cast today`;
+
+  const cols = Object.entries(VOTABLE_TRAITS).map(([trait, options]) => {
+    const traitVotes  = tallies[trait] || {};
+    const traitTotal  = Object.values(traitVotes).reduce((a,b) => a+b, 0);
+    const topValue    = traitTotal > 0 ? Object.entries(traitVotes).sort((a,b)=>b[1]-a[1])[0][0] : null;
+    const myVote      = myVotes[trait];
+    const currentVal  = GENOME[trait] || '';
+    const alreadyVoted = !!myVote;
+
+    const buttons = options.map(opt => {
+      const count  = traitVotes[opt] || 0;
+      const pct    = traitTotal > 0 ? Math.round((count / traitTotal) * 100) : 0;
+      const isMine = myVote === opt;
+      const label  = opt.replace(/_/g, ' ');
+      const classes = ['vote-btn', isMine ? 'my-vote' : ''].filter(Boolean).join(' ');
+      return `<button class="${classes}"
+        data-trait="${trait}" data-value="${opt}"
+        ${alreadyVoted ? 'disabled' : ''}
+        onclick="castVote('${trait}','${opt}')">
+        <div class="bar" style="width:${pct}%"></div>
+        <span class="btn-label">${label}</span>
+        <span class="btn-count">${count > 0 ? count : ''}</span>
+      </button>`;
+    }).join('');
+
+    return `<div class="trait-column">
+      <div class="trait-label">${trait}</div>
+      <div class="trait-current">${currentVal.replace(/_/g,' ')}</div>
+      <div class="vote-options">${buttons}</div>
+    </div>`;
+  });
+
+  container.innerHTML = cols.join('');
+}
+
+function setStatus(msg, type='') {
+  const el = document.getElementById('vote-status');
+  if (!el) return;
+  el.className = 'vote-status-bar' + (type ? ' ' + type : '');
+  el.innerHTML = type === 'loading'
+    ? `<span class="spinner"></span> ${msg}`
+    : msg;
+}
+
+async function loadVotes() {
+  try {
+    const res = await fetch(API_BASE + '/votes');
+    if (!res.ok) throw new Error('fetch failed');
+    const data = await res.json();
+    currentTallies = data.tallies || {};
+    renderVotingPanel(currentTallies, data.total || 0);
+  } catch (e) {
+    document.getElementById('voting-traits').innerHTML =
+      '<div style="padding:1.5rem;color:var(--text-dim);font-size:0.7rem;">Could not load vote data. Is the voting API running?</div>';
+  }
+}
+
+async function castVote(trait, value) {
+  setStatus('Casting vote...', 'loading');
+  try {
+    const res = await fetch(API_BASE + '/vote', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({trait, value}),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setStatus(data.error || 'Vote failed.', 'err');
+      return;
+    }
+    saveMyVote(trait, value);
+    // Update local tally immediately without re-fetching
+    if (!currentTallies[trait]) currentTallies[trait] = {};
+    currentTallies[trait][value] = data.new_count;
+    const total = data.total_votes;
+    renderVotingPanel(currentTallies, total);
+    const label = value.replace(/_/g, ' ');
+    setStatus(`Voted for <strong style="color:var(--accent)">${label}</strong> as tomorrow's ${trait}. The hive has spoken.`, 'ok');
+  } catch (e) {
+    setStatus('Network error. Vote not recorded.', 'err');
+  }
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  // Genome interpreter
+  const readingEl = document.getElementById('genome-reading');
+  const rawEl     = document.getElementById('genome-raw-display');
+  if (readingEl) readingEl.innerHTML = interpretGenome(GENOME);
+  if (rawEl)     rawEl.textContent   = JSON.stringify(GENOME, null, 2);
+
+  // Extinction countdown
+  extinctionCountdown();
+  setInterval(extinctionCountdown, 60000);
+
+  // Voting panel
+  loadVotes();
+});
+</script>
+</body>
+</html>"""
+
+
+def run():
+    os.makedirs(GENERATOR_DIR, exist_ok=True)
+    metadata = load_metadata()
+    html = build_index(metadata)
+    with open(INDEX_FILE, "w", encoding="utf-8") as f:
+        f.write(html)
+    print(f"Index rebuilt: {INDEX_FILE}  ({len(metadata)} page(s))")
+
+
+if __name__ == "__main__":
+    run()
