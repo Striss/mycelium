@@ -83,14 +83,14 @@ OLLAMA_HOST=0.0.0.0 ollama serve
 
 Test from the Pi:
 ```bash
-curl http://192.168.2.218:11434/api/tags
+curl http://192.168.x.x:11434/api/tags
 ```
 
 ### 3. Run manually for the first time
 
 ```bash
 cd ~/mycelium
-OLLAMA_HOST=http://192.168.2.218:11434 OLLAMA_MODEL=qwen2.5-coder:32b .venv/bin/python run_nightly.py
+OLLAMA_HOST=http://192.168.x.x:11434 OLLAMA_MODEL=qwen2.5-coder:32b .venv/bin/python run_nightly.py
 ```
 
 This will create the genome, call Ollama, generate today's page, and rebuild the index.
@@ -102,18 +102,18 @@ Point nginx at the mycelium directory. Because nginx runs as `www-data`, you'll 
 ```bash
 sudo groupadd webshare
 sudo usermod -aG webshare www-data
-sudo usermod -aG webshare jgray
-sudo chgrp -R webshare /home/jgray/mycelium
-sudo chmod -R g+rX /home/jgray/mycelium
-sudo chmod g+s /home/jgray/mycelium
+sudo usermod -aG webshare USER
+sudo chgrp -R webshare /home/USER/mycelium
+sudo chmod -R g+rX /home/USER/mycelium
+sudo chmod g+s /home/USER/mycelium
 ```
 
 nginx config:
 ```nginx
 server {
     listen 80;
-    server_name mycelium.heyjustingray.com;
-    root /home/jgray/mycelium;
+    server_name mycelium.domainname.com;
+    root /home/USER/mycelium;
     index index.html;
 
     location / {
@@ -136,7 +136,7 @@ sudo systemctl enable --now mycelium-votes
 sudo systemctl status mycelium-votes
 ```
 
-The service file points directly at `.venv/bin/python` and runs as the `jgray` user.
+The service file points directly at `.venv/bin/python` and runs as the user.
 
 ### 6. Set up cron for nightly generation
 
@@ -146,7 +146,7 @@ crontab -e
 
 Add (runs at 1:30am daily):
 ```
-30 1 * * * cd /home/jgray/mycelium && OLLAMA_HOST=http://192.168.2.218:11434 OLLAMA_MODEL=qwen2.5-coder:32b .venv/bin/python run_nightly.py >> logs/nightly.log 2>&1
+30 1 * * * cd /home/USER/mycelium && OLLAMA_HOST=http://192.168.2.218:11434 OLLAMA_MODEL=qwen2.5-coder:32b .venv/bin/python run_nightly.py >> logs/nightly.log 2>&1
 ```
 
 Note: use `cd` rather than absolute paths so relative file resolution works correctly.
@@ -191,7 +191,7 @@ Visitors vote daily on mood, medium, and obsession. If a trait gets a clear plur
 
 ```bash
 # Generate today's page normally
-OLLAMA_HOST=http://192.168.2.218:11434 OLLAMA_MODEL=qwen2.5-coder:32b .venv/bin/python run_nightly.py
+OLLAMA_HOST=http://192.168.x.x:11434 OLLAMA_MODEL=qwen2.5-coder:32b .venv/bin/python run_nightly.py
 
 # Regenerate today's page without mutating the genome or archiving votes
 .venv/bin/python generate.py --test
@@ -206,7 +206,7 @@ OLLAMA_HOST=http://192.168.2.218:11434 OLLAMA_MODEL=qwen2.5-coder:32b .venv/bin/
 .venv/bin/python genome.py --mutate
 
 # Fill in any missing pages for this month
-OLLAMA_HOST=http://192.168.2.218:11434 OLLAMA_MODEL=qwen2.5-coder:32b .venv/bin/python backfill.py
+OLLAMA_HOST=http://192.168.x.x:11434 OLLAMA_MODEL=qwen2.5-coder:32b .venv/bin/python backfill.py
 
 # Fill a specific past month
 .venv/bin/python backfill.py --month 2026-02
