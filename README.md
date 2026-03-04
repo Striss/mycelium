@@ -2,7 +2,15 @@
 
 **A self-replicating digital organism running on a Raspberry Pi.**
 
-Every night, the organism mutates its genetic code and generates a completely new HTML page — a unique aesthetic artifact shaped by its evolving traits. Watch its personality drift over days, weeks, and months.
+Every night, the organism mutates its genetic code and generates a completely new HTML page — a unique aesthetic artifact shaped by its evolving traits. Watch its personality drift over days, weeks, and months. Visitors can vote to influence tomorrow's mutation. Once a month, an extinction event wipes the genome entirely.
+
+Live at: [mycelium.heyjustingray.com](https://mycelium.heyjustingray.com)
+
+---
+
+## How It Works
+
+A cron job fires at 1:30am every night. It mutates a JSON genome, optionally applies visitor votes, calls a local LLM via Ollama, and saves the resulting HTML page. The index rebuilds itself. No human intervention required.
 
 ---
 
@@ -10,79 +18,138 @@ Every night, the organism mutates its genetic code and generates a completely ne
 
 ```
 mycelium/
-├── run_nightly.py              ← Cron calls this
+├── run_nightly.py          ← Cron entry point
+├── generate.py             ← Calls Ollama → writes page HTML
+├── genome.py               ← Trait system + mutation engine
+├── build_index.py          ← Rebuilds index.html
+├── vote_api.py             ← Flask API for visitor mutation voting
+├── backfill.py             ← Generate pages for missing past days
+├── fresh_start.py          ← Wipe everything and start over
 ├── requirements.txt
+├── .venv/                  ← Python virtual environment
 ├── generator/
-│   ├── genome.py               ← Trait system + mutation engine
-│   ├── generate.py             ← Calls Claude API → writes page HTML
-│   ├── build_index.py          ← Rebuilds index.html
 │   ├── current_genome.json     ← Live genome state (auto-created)
 │   ├── genome_history.json     ← Full genome log (auto-created)
-│   └── pages_metadata.json     ← Page index data (auto-created)
+│   ├── pages_metadata.json     ← Page index data (auto-created)
+│   ├── votes.json              ← Today's votes (auto-created)
+│   └── votes_history.json      ← Archived past votes (auto-created)
 ├── pages/
-│   ├── 2025-01-01.html         ← Generated pages live here
-│   └── ...
+│   └── YYYY-MM-DD.html         ← Generated pages
 ├── logs/
 │   └── nightly.log
-└── index.html                  ← Auto-rebuilt each night
+└── index.html                  ← Auto-rebuilt nightly
 ```
+
+---
+
+## Architecture
+
+### LLM — Ollama (local, networked)
+
+Page generation uses a **locally hosted LLM via Ollama**, running on a separate PC on the same network. The Raspberry Pi makes API calls to it using the OpenAI-compatible endpoint Ollama exposes. No cloud API, no API key, no cost per generation.
+
+Recommended model: `qwen2.5-coder:32b` (best quality). The 7b works but produces simpler output.
+
+```
+Raspberry Pi (nginx + Python) ──→ Ollama PC (192.168.2.218:11434)
+```
+
+### Voting API — Flask
+
+A lightweight Flask server runs on `localhost:5000` on the Pi and is proxied through nginx at `/api/`. It stores daily votes in `generator/votes.json`. Votes reset after each nightly generation. Rate-limited to 3 votes per IP per hour.
 
 ---
 
 ## Setup
 
-### 1. Install dependencies
+### 1. Create a virtual environment and install dependencies
 
 ```bash
-cd mycelium
-pip3 install -r requirements.txt
+cd ~/mycelium
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-### 2. Set your Anthropic API key
+### 2. Set up Ollama on a networked machine
+
+Install Ollama on any machine on your local network, pull a model, and make sure it's accessible:
 
 ```bash
-export ANTHROPIC_API_KEY="sk-ant-..."
-# Add to ~/.bashrc or ~/.profile to persist
+# On the Ollama machine
+ollama pull qwen2.5-coder:32b
+OLLAMA_HOST=0.0.0.0 ollama serve
+```
+
+Test from the Pi:
+```bash
+curl http://192.168.2.218:11434/api/tags
 ```
 
 ### 3. Run manually for the first time
 
 ```bash
-python3 run_nightly.py
+cd ~/mycelium
+OLLAMA_HOST=http://192.168.2.218:11434 OLLAMA_MODEL=qwen2.5-coder:32b .venv/bin/python run_nightly.py
 ```
 
-This will:
-- Create `generator/current_genome.json` (the organism's DNA)
-- Call the Claude API to generate `pages/YYYY-MM-DD.html`
-- Rebuild `index.html`
+This will create the genome, call Ollama, generate today's page, and rebuild the index.
 
-### 4. Serve with your existing web server
+### 4. Serve with nginx
 
-Point your server's document root at the `mycelium/` folder.
+Point nginx at the mycelium directory. Because nginx runs as `www-data`, you'll need to grant read access:
 
-**Nginx example:**
+```bash
+sudo groupadd webshare
+sudo usermod -aG webshare www-data
+sudo usermod -aG webshare jgray
+sudo chgrp -R webshare /home/jgray/mycelium
+sudo chmod -R g+rX /home/jgray/mycelium
+sudo chmod g+s /home/jgray/mycelium
+```
+
+nginx config:
 ```nginx
 server {
     listen 80;
-    server_name your-pi.local;
-    root /home/pi/mycelium;
+    server_name mycelium.heyjustingray.com;
+    root /home/jgray/mycelium;
     index index.html;
+
     location / {
         try_files $uri $uri/ =404;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:5000/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
     }
 }
 ```
 
-### 5. Set up cron for nightly generation
+### 5. Set up the voting API as a systemd service
+
+```bash
+sudo cp mycelium-votes.service /etc/systemd/system/
+sudo systemctl enable --now mycelium-votes
+sudo systemctl status mycelium-votes
+```
+
+The service file points directly at `.venv/bin/python` and runs as the `jgray` user.
+
+### 6. Set up cron for nightly generation
 
 ```bash
 crontab -e
 ```
 
-Add this line (runs at 2:00 AM daily):
+Add (runs at 1:30am daily):
 ```
-0 2 * * * ANTHROPIC_API_KEY=sk-ant-YOUR-KEY /usr/bin/python3 /home/pi/mycelium/run_nightly.py >> /home/pi/mycelium/logs/nightly.log 2>&1
+30 1 * * * cd /home/jgray/mycelium && OLLAMA_HOST=http://192.168.2.218:11434 OLLAMA_MODEL=qwen2.5-coder:32b .venv/bin/python run_nightly.py >> logs/nightly.log 2>&1
 ```
+
+Note: use `cd` rather than absolute paths so relative file resolution works correctly.
 
 ---
 
@@ -92,50 +159,119 @@ Each page has a **genome** — a JSON object with evolving traits:
 
 | Trait | What it controls |
 |-------|-----------------|
-| `mood` | Emotional register of the content |
-| `medium` | Format/style (ASCII art, SVG, poetry, fake data viz, etc.) |
-| `obsession` | The subject matter (primes, sleep cycles, dead languages...) |
-| `voice` | Writing style (academic, cryptic, bureaucratic...) |
-| `palette` | Visual color scheme |
-| `density` | How much content is on the page |
-| `self_awareness` | 0-5: how much the page knows it's generated |
-| `generation` | Increments each day |
+| `mood` | Emotional register (melancholic, euphoric, paranoid...) |
+| `medium` | Page form (ASCII art, SVG geometry, fake data viz, timeline...) |
+| `obsession` | Subject matter (prime numbers, dead languages, dream logic...) |
+| `voice` | Writing style (academic, cryptic, oracular, confessional...) |
+| `palette` | Colour scheme (10 options, terminal to pastel) |
+| `density` | Content volume (sparse → overwhelming) |
+| `self_awareness` | 0–5: how much the page knows it was generated by AI |
+| `generation` | Increments each night, survives extinction events |
 
-Each night, traits mutate at different rates:
-- `mood` changes 35% of nights
-- `voice` changes only 15% of nights (very stable)
-- `self_awareness` drifts ±1 point at 10% rate
+Mutation rates per night:
+- `mood` — 35%
+- `palette` — 30%
+- `medium` — 25%
+- `density` — 25%
+- `obsession` — 20%
+- `voice` — 15%
+- `self_awareness` — 10% (drifts ±1)
 
 ### Extinction Events
 
-On the **1st of each month**, the genome resets completely — all traits randomize. The page that day will reference this as an extinction event.
+On the **1st of each month**, the genome fully resets — all traits randomised, all memory erased. Only the generation counter survives. Pages generated after an extinction are marked with an EXTINCTION badge in the fossil record and the organism's content reflects the reset.
+
+### Hive Influence
+
+Visitors vote daily on mood, medium, and obsession. If a trait gets a clear plurality (>40% of votes), it overrides or reinforces that night's mutation. Pages shaped by votes are marked with a HIVE badge. Votes are archived after use and the tally resets for the next day.
 
 ---
 
 ## Manual Controls
 
 ```bash
-# Regenerate today's page (same genome, new content)
-python3 generator/generate.py
+# Generate today's page normally
+OLLAMA_HOST=http://192.168.2.218:11434 OLLAMA_MODEL=qwen2.5-coder:32b .venv/bin/python run_nightly.py
 
-# Just rebuild the index (no API call)
-python3 generator/build_index.py
+# Regenerate today's page without mutating the genome or archiving votes
+.venv/bin/python generate.py --test
+
+# Rebuild the index without generating a page
+.venv/bin/python build_index.py
 
 # Inspect current genome
-python3 generator/genome.py
+.venv/bin/python genome.py
 
-# Preview a mutation
-python3 generator/genome.py --mutate
+# Preview what a mutation would produce
+.venv/bin/python genome.py --mutate
+
+# Fill in any missing pages for this month
+OLLAMA_HOST=http://192.168.2.218:11434 OLLAMA_MODEL=qwen2.5-coder:32b .venv/bin/python backfill.py
+
+# Fill a specific past month
+.venv/bin/python backfill.py --month 2026-02
+
+# Complete reset — wipes everything and backfills from the 1st
+.venv/bin/python fresh_start.py
 ```
+
+### Clearing votes manually
+
+```bash
+.venv/bin/python3 -c "
+import json
+from datetime import date
+with open('generator/votes.json', 'w') as f:
+    json.dump({'date': str(date.today()), 'tallies': {}, 'total': 0}, f, indent=2)
+print('Votes cleared.')
+"
+```
+
+If the site still shows you as having voted, clear it in the browser console:
+```javascript
+sessionStorage.removeItem('mycelium_votes')
+```
+
+### Resetting the genome without wiping history
+
+```bash
+.venv/bin/python3 -c "
+import sys; sys.path.insert(0, '.')
+from genome import load_genome, save_genome, mutate
+import json
+
+genome = load_genome()
+fresh = mutate(genome, force_extinction=True)
+fresh['generation'] = 0
+fresh['lineage'] = []
+save_genome(fresh)
+print('Reset genome:', json.dumps(fresh, indent=2))
+"
+```
+
+---
+
+## Index Page Features
+
+- **Genome Interpreter** — translates raw JSON into plain English
+- **Next Generation Countdown** — ticks down to 1:30am, shows "◆ growing..." in the final 5 minutes
+- **Extinction Countdown** — days/hours until the next monthly reset, turns red the day before
+- **Mutation Voting** — three-column panel for mood, medium, obsession with live vote tallies
+- **Fossil Record** — archive grid of all past pages with palette-accurate preview cards
+- **Badges** — EXTINCTION, HIVE, and BACKFILL markers in the fossil record
 
 ---
 
 ## Troubleshooting
 
-**No pages show up:** Run `python3 run_nightly.py` manually and check for errors.
+**No pages show up:** Run `run_nightly.py` manually and check for errors.
 
-**API errors:** Verify `ANTHROPIC_API_KEY` is set: `echo $ANTHROPIC_API_KEY`
+**Ollama connection refused:** Make sure Ollama is running with `OLLAMA_HOST=0.0.0.0` on the other machine and that the port is accessible from the Pi. Test with `curl http://192.168.2.218:11434/api/tags`.
 
-**Cron not running:** Check `logs/nightly.log`. Make sure the API key is exported in the cron line itself (cron doesn't inherit shell env vars).
+**Voting API not responding:** Check `sudo systemctl status mycelium-votes`. Restart with `sudo systemctl restart mycelium-votes`.
 
-**Costs:** Each page generation uses ~1,500-3,000 output tokens with Claude Opus. Budget accordingly (~$0.02-0.05 per page at current pricing).
+**Cron not running:** Check `logs/nightly.log`. Cron doesn't inherit shell environment — all env vars must be set in the cron line itself, or use the `cd &&` form.
+
+**nginx 403 errors:** The `webshare` group setup may be incomplete. Check that `www-data` is in the group and that the mycelium directory has `g+rX` permissions.
+
+**Pages look generic:** Try a larger Ollama model. The 7b models drop complex instructions. `qwen2.5-coder:32b` or `qwen2.5-coder:14b` produce significantly better output.
