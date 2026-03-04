@@ -423,23 +423,6 @@ def build_index(metadata):
 
     """ + archive_section + """
 
-    <section class="voting-section">
-      <h2 class="section-title">INFLUENCE TOMORROW'S MUTATION</h2>
-      <div class="voting-box">
-        <div class="voting-intro">
-          <span>Vote on up to <em>one trait per category</em>. The hive mind shapes the next generation.
-          Votes reset each night after the organism is born.</span>
-          <span id="vote-tally">loading votes...</span>
-        </div>
-        <div class="voting-traits" id="voting-traits">
-          <div style="padding:2rem;color:var(--text-dim);font-size:0.7rem;">Loading vote data...</div>
-        </div>
-        <div class="vote-status-bar" id="vote-status">
-          Cast a vote above to influence tomorrow's organism.
-        </div>
-      </div>
-    </section>
-
     <section class="interpreter-section">
       <h2 class="section-title">GENOME INTERPRETER</h2>
       <div class="interpreter-box">
@@ -456,6 +439,23 @@ def build_index(metadata):
       </div>
     </section>
 
+
+    <section class="voting-section">
+      <h2 class="section-title">INFLUENCE TOMORROW'S MUTATION</h2>
+      <div class="voting-box">
+        <div class="voting-intro">
+          <span>Vote on up to <em>one trait per category</em>. The hive mind shapes the next generation.
+          Votes reset each night after the organism is born.</span>
+          <span id="vote-tally">loading votes...</span>
+        </div>
+        <div class="voting-traits" id="voting-traits">
+          <div style="padding:2rem;color:var(--text-dim);font-size:0.7rem;">Loading vote data...</div>
+        </div>
+        <div class="vote-status-bar" id="vote-status">
+          Cast a vote above to influence tomorrow's organism.
+        </div>
+      </div>
+    </section>
 
     <section class="about-section">
       <div class="about-block">

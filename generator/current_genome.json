@@ -1,19 +1,18 @@
 {
-  "mood": "nostalgic",
-  "medium": "glitch_html",
-  "obsession": "fibonacci",
-  "voice": "academic",
-  "palette": "earth_oxidized",
-  "density": "moderate",
-  "self_awareness": 2,
-  "generation": 9,
+  "mood": "anxious",
+  "medium": "timeline",
+  "obsession": "prime_numbers",
+  "voice": "childlike",
+  "palette": "pastel_decay",
+  "density": "overwhelming",
+  "self_awareness": 4,
+  "generation": 4,
   "extinction_flag": false,
   "lineage": [
-    "c5c876f0",
-    "20a8f45b",
-    "05b35a49",
-    "322acf45",
-    "9341ed46"
+    "455c223e",
+    "018d80ed",
+    "1d5b3936",
+    "687dd259"
   ],
   "born": "2026-03-04"
 }

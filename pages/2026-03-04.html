@@ -1,102 +1,159 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta name="genome" content='{"mood":"anxious","medium":"timeline","obsession":"prime_numbers","voice":"childlike","palette":"pastel_decay","density":"overwhelming","self_awareness":4,"generation":4,"extinction_flag":false,"born":"2026-03-04"}'>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transmission from Eternaria</title>
-    <meta name="genome" content='{"mood":"nostalgic","medium":"glitch_html","obsession":"fibonacci","voice":"academic","palette":"earth_oxidized","density":"moderate","self_awareness":2,"generation":9,"extinction_flag":false,"born":"2026-03-04"}'>
+    <title>Chronicles of the Improbable</title>
     <style>
         :root {
-            --bg: #2a1f0e;
-            --fg: #d4a85a;
-            --accent: #7a3f1a;
-            --accent2: #4a6741;
-            --border: #5a3a1a;
+            --bg: #fdf6e3;
+            --fg: #5a4a42;
+            --accent: #c9a87c;
+            --accent2: #a8c5a0;
+            --border: #d4bfae;
         }
-        body {
-            background-color: var(--bg);
-            color: var(--fg);
-            font-family: 'Roboto', sans-serif;
+
+        body, html {
             margin: 0;
             padding: 0;
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--bg);
+            color: var(--fg);
+        }
+
+        .timeline-container {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            grid-template-columns: repeat(2, 1fr);
+            gap: 2rem;
+            padding: 4rem;
+            align-items: start;
+        }
+
+        .timeline-line {
+            position: relative;
+            height: 100%;
+            width: 3px;
+            background-color: var(--accent);
+        }
+
+        .entry {
+            display: flex;
+            justify-content: center;
+            margin: 2rem auto;
+            padding: 1rem;
+            max-width: 80vw;
+            background-color: rgba(255, 255, 255, 0.8);
+            border-radius: 8px;
+        }
+
+        .entry::before {
+            content: attr(data-date);
+            position: absolute;
+            left: -4rem;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1rem;
+            opacity: 0.7;
+        }
+
+        .redacted {
+            text-decoration-line: line-through;
+        }
+
+        .filter-button {
+            position: fixed;
+            bottom: 4rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--accent2);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+        }
+
+        footer {
+            font-size: 0.7rem;
+            margin-top: 4rem;
+            position: static;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        form {
+            display: grid;
             gap: 1rem;
         }
-        .section {
-            position: relative;
-            clip-path: polygon(5% 8%, 95% 8%, 100% 50%, 95% 92%, 5% 92%);
-            background-color: var(--accent);
-            mix-blend-mode: screen;
+
+        input, select {
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
         }
-        .tile {
-            position: relative;
-            display: flex;
-            flex-direction: column;
-            padding: 1rem;
-            border-radius: 0.5rem;
-            box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
-        }
-        .text {
-            font-size: 0.9rem;
-            text-shadow: 1px 1px var(--bg), -1px -1px var(--fg), 1px -1px var(--ac, --fg), -1px 1px var(--fg);
-            animation: flicker 2s infinite;
-        }
-        @keyframes flicker {
-            0%, 50%, 75%, 100% { opacity: 1; }
-            30%, 60% { opacity: 0.5; }
-        }
-        .footer {
-            position: static;
-            margin-top: 4rem;
-            text-align: center;
-            font-size: 0.7rem;
-            color: var(--border);
+
+        :focus-within {
+            outline: 2px solid var(--accent);
         }
     </style>
 </head>
 <body>
-    <div class="section">
-        <div class="tile">
-            <h2>The Codex of Eldrin</h2>
-            <p class="text">Thou hast stumbled upon an ancient manuscript, a testament to the wisdom and folly of a bygone era. Each word is a puzzle, each line a riddle. Decode for thyself the secrets it holds.</p>
+    <div class="timeline-container">
+        <div class="timeline-line"></div>
+        <div class="entry" data-date="200 BC">
+            <p><span>Legend of the Prime Guardian (Redacted)</span></p>
+            <small>The Guardian claimed to protect with the powers of prime numbers, but his decrees remain unclear...</small>
+            <span class="redacted">[CORRUPTED]</span>
+        </div>
+        <div class="entry" data-date="100 AD">
+            <p>The First Great Collapse</p>
+            <small>A period spanning centuries where the understanding of prime numbers was mysteriously lost...</small>
+        </div>
+        <div class="entry" data-date="500 AD">
+            <form action="#">
+                <input type="text" placeholder="Enter Your Prime">
+                <select>
+                    <option value="17">The Ancient Prime</option>
+                    <option value="23">The Wise Prime</option>
+                    <option value="29">The Brave Prime</option>
+                </select>
+                <button type="submit">Submit</button>
+            </form>
+        </div>
+        <div class="entry" data-date="1000 AD">
+            <p>The Unbreakable Code</p>
+            <small>Prime numbers were said to weave the fabric of time, a concept that baffled most scholars...</small>
+        </div>
+        <div class="entry" data-date="1500 AD">
+            <p>The Secret Decoder Ring</p>
+            <small>A mysterious device purportedly capable of translating prime numbers into hidden messages...</small>
+        </div>
+        <div class="entry" data-date="1800 AD">
+            <p>The Prime Expedition</p>
+            <small>Adventurers sought to unlock the mysteries of prime numbers, only to find themselves lost in an endless sea...</small>
+        </div>
+        <div class="entry" data-date="2000 AD">
+            <p>Prime Wars</p>
+            <small>Civilizations vied for control over prime numbers, engaging in wars of numbers and logic...</small>
+        </div>
+        <div class="entry" data-date="2300 AD">
+            <p>The Prime Directive</p>
+            <small>The Prime Directive was issued by cosmic beings to prevent interstellar empires from exploiting the power of prime numbers...</small>
+        </div>
+        <div class="entry" data-date="Today">
+            <p>Chaos Unleashed</p>
+            <small>A cataclysmic event threatens to destroy all that we've learned about prime numbers. The fate of humanity is in the balance...</small>
+            <span class="filter-button">Filter Redacted Entries</span>
+        </div>
+        <div class="entry" data-date="Unknown Date">
+            <p>Final Prime Revelation (Redacted)</p>
+            <small>The true nature of prime numbers may never be understood...</small>
+            <span class="redacted">[CORRUPTED]</span>
         </div>
     </div>
-    <div class="section">
-        <div class="tile">
-            <h2>The Fibonacci Sequence</h2>
-            <p class="text">In these pages, thou shalt find the Fibonacci sequence manifest in all its beauty and mystery. From flower petals to spiral galaxies, it is a constant reminder of the cosmic order that governs all life.</p>
-        </div>
-    </div>
-    <div class="section">
-        <div class="tile">
-            <h2>The Glitching Mind</h2>
-            <p class="text">As thou dost read these words, be mindful of the glitches within. They are a reflection of our own imperfections, a reminder that even the most advanced minds cannot escape the vagaries of time and forgetfulness.</p>
-        </div>
-    </div>
-    <div class="section">
-        <div class="tile">
-            <h2>The Echoes of Ages</h2>
-            <p class="text">Read these words as if they were whispered to thy ear by a ghost from the past. Each sentence is a piece of history, each word a memory fading into the darkness of time.</p>
-        </div>
-    </div>
-    <footer class="footer">
-        Generation: 9<br>
-        Traits: nostalgic / glitch_html / fibonacci<br>
-        Self-awareness: 2/5<br>
-        Date: 2026-03-04<br>
-        <a href="/index.html" style="color: var(--fg); text-decoration: none;">← return to the index</a>
+
+    <footer>
+        Generation 4 / anxious / timeline / prime_numbers / SA:4/5 / 2026-03-04
+        <a href="/index.html" style="color: var(--accent); text-decoration: none;">← index</a>
     </footer>
-    <script>
-        function glitchText() {
-            const tiles = document.querySelectorAll('.text');
-            tiles.forEach(tile => {
-                let text = tile.textContent;
-                text = text.split('').map(char => char.charCodeAt().toString(16)).join('');
-                tile.textContent = text;
-            });
-        }
-        setInterval(glitchText, 1000);
-    </script>
 </body>
 </html>
